@@ -11,17 +11,18 @@
 #import <CoreLocation/CoreLocation.h>
 #import "MapViewController.h"
 
-@interface MapViewController () <CLLocationManagerDelegate> {
+@interface MapViewController () <CLLocationManagerDelegate, MKMapViewDelegate> {
     CLLocationManager *objLocationManager;
-    double latitude_UserLocation, longitude_UserLocation;
+    CLLocationCoordinate2D stationCoordinate;
+    double stationLatitue, stationLongitute;
 
     NSArray* routes;
     BOOL isUpdatingRoutes;
     
 }
 
-@property (strong, nonatomic) MKPlacemark *destination;
-@property (strong,nonatomic) MKPlacemark *source;
+@property (strong,nonatomic) MKMapItem *destination;
+@property (strong,nonatomic) MKMapItem *source;
 
 
 @end
@@ -34,19 +35,92 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    [self loadUserLocation];
-    [self getDirections];
+    //mapViewDelegete.delegate = self;
+    mapView.showsUserLocation = YES;
+    MKUserLocation *userLocation = mapView.userLocation;
+    MKCoordinateRegion region;
+    MKCoordinateSpan span;
+    CLLocationCoordinate2D location;
+    location.latitude = userLocation.coordinate.latitude;
+    location.longitude = userLocation.coordinate.longitude;
+    span.latitudeDelta = 0.005;
+    span.longitudeDelta = 0.005;
+    region.span = span;
+    region.center = location;
+    [mapView setRegion:region animated:TRUE];
+    //MKCoordinateRegion region = MKCoordinateRegionMakeWithDistance(userLocation.location.coordinate, 0.02, 0.02);
+    //[mapView setRegion:region animated:YES];
+    mapView.delegate = self;
+    [self showRouteOnMap];
     
-   }
+    }
 
-
--(void)getDirections {
+-(void)showRouteOnMap {
+    stationCoordinate = CLLocationCoordinate2DMake(25.033408, 121.564099);
     MKDirectionsRequest *request = [[MKDirectionsRequest alloc] init];
     request.source = [MKMapItem mapItemForCurrentLocation];
-    request.destination = _destination;
+    MKPlacemark *placemarkDestination = [[MKPlacemark alloc] initWithCoordinate: stationCoordinate];
+    MKMapItem *destination = [[MKMapItem alloc] initWithPlacemark:placemarkDestination];
+    [request setDestination:destination];
+    //request
     request.requestsAlternateRoutes = NO;
+    request.transportType = MKDirectionsTransportTypeWalking;
+    MKDirections *directions = [[MKDirections alloc] initWithRequest:request];
+    [self addAnnotation:placemarkDestination];
+    [directions calculateDirectionsWithCompletionHandler:
+     ^(MKDirectionsResponse *response, NSError *error) {
+         
+             if (error) {
+                 NSLog(@"ERROR");
+                 NSLog(@"%@", [error localizedDescription]);
+             } else {
+                 [self showRoute: response];
+             }
+     }];
+}
+
+-(void)showRoute:(MKDirectionsResponse *)response {
     
-   /* CLLocationCoordinate2D sourceCoords = CLLocationCoordinate2DMake(latitude_UserLocation, longitude_UserLocation);
+        for (MKRoute * route in response.routes) {
+            [mapView addOverlay:route.polyline level:MKOverlayLevelAboveRoads];
+            
+            for (MKRouteStep *step in route.steps) {
+                NSLog(@"%@", step.instructions);
+            }
+        
+    }
+    
+}
+
+- (MKOverlayRenderer *)mapView:(MKMapView *)mapView rendererForOverlay:(id < MKOverlay >)overlay
+{
+    MKPolylineRenderer *renderer =
+    [[MKPolylineRenderer alloc] initWithOverlay:overlay];
+    renderer.strokeColor = [UIColor blueColor];
+    renderer.lineWidth = 5.0;
+    return renderer;
+}
+
+- (void) addAnnotation:(CLPlacemark *)placemark {
+    MKPointAnnotation *point = [[MKPointAnnotation alloc] init];
+    point.coordinate = CLLocationCoordinate2DMake(placemark.location.coordinate.latitude, placemark.location.coordinate.longitude);
+    
+    [self.mapView addAnnotation:point];
+}
+
+- (void) mapView:(MKMapView *)mapView didUpdateUserLocation:(MKUserLocation *)userLocation {
+    MKCoordinateRegion region;
+    MKCoordinateSpan span;
+    span.latitudeDelta = 0.005;
+    span.longitudeDelta = 0.005;
+    CLLocationCoordinate2D location;
+    location.latitude = userLocation.coordinate.latitude;
+    location.longitude = userLocation.coordinate.longitude;
+    region.span = span;
+    region.center = location;
+    [mapView setRegion:region animated:YES];
+}
+/* CLLocationCoordinate2D sourceCoords = CLLocationCoordinate2DMake(latitude_UserLocation, longitude_UserLocation);
     //shown area
     MKCoordinateSpan span;
     span.latitudeDelta = 0.2;
@@ -60,7 +134,7 @@
     region.span = span;
     region.center = location2D;
     [mapView setRegion:region animated:true];
-    */
+    
     CLLocationCoordinate2D sourceCoords = CLLocationCoordinate2DMake(25.135915, 121.664099);
     MKCoordinateRegion region;
     MKCoordinateSpan span;
@@ -69,111 +143,17 @@
     span.longitudeDelta = 1;
     region.span = span;
     [mapView setRegion:region animated:TRUE];
-    
-    MKPlacemark *placeMark = [[MKPlacemark alloc] initWithCoordinate:sourceCoords addressDictionary:nil];
-    MKPointAnnotation *annotation = [[MKPointAnnotation alloc] init];
-    annotation.coordinate = sourceCoords;
-    annotation.title = @"title";
-    [self.mapView addAnnotation:annotation];
-    
-    self.destination = placeMark;
+
     
     
     MKMapItem *mapItem = [[MKMapItem alloc] initWithPlacemark:_destination];
     CLLocationCoordinate2D destCoords = CLLocationCoordinate2DMake(25.035915, 121.564099);
     MKPlacemark *placeMark1 = [[MKPlacemark alloc] initWithCoordinate:destCoords addressDictionary:nil];
-    
-    MKPointAnnotation *annotation1 = [[MKPointAnnotation alloc] init];
-    annotation1.coordinate = destCoords;
-    annotation1.title = @"title2";
-    [self.mapView addAnnotation:annotation1];
-    
-    self.source = placeMark1;
-    //_source = placeMark1;
+
     
     MKMapItem *mapItem1 = [[MKMapItem alloc] initWithPlacemark:_source];
-    
-    
     request.source = mapItem1;
-    
-    
-    
-    MKDirections *directions = [[MKDirections alloc] initWithRequest:request];
-    [directions calculateETAWithCompletionHandler:^(MKETAResponse * _Nullable response, NSError * _Nullable error) {
-        
-        
-        if (error) {
-            NSLog(@"ERROR");
-            NSLog(@"%@", [error localizedDescription]);
-        } else {
-            [self showRoute: response];
-        }
-    }];
-    
-}
 
--(void)showRoute:(MKDirectionsResponse *)response {
-    for (MKRoute * route in response.routes) {
-        [mapView addOverlay:route.polyline level:MKOverlayLevelAboveRoads];
-        
-        for (MKRouteStep *step in route.steps) {
-            NSLog(@"%@", step.instructions);
-        }
-    }
-}
-
-- (MKOverlayRenderer *)mapView:(MKMapView *)mapView rendererForOverlay:(id<MKOverlay>)overlay
-{
-    MKPolylineRenderer *renderer = [[MKPolylineRenderer alloc] initWithPolyline:overlay];
-    renderer.strokeColor = [UIColor colorWithRed:0.0/255.0 green:171.0/255.0 blue:253.0/255.0 alpha:1.0];
-    renderer.lineWidth = 10.0;
-    return  renderer;
-}
-
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
-}
-
-- (void) loadUserLocation
-{
-    objLocationManager = [[CLLocationManager alloc] init];
-    objLocationManager.delegate = self;
-    objLocationManager.distanceFilter = kCLDistanceFilterNone;
-    objLocationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters;
-    if ([objLocationManager respondsToSelector:@selector(requestWhenInUseAuthorization)]) {
-        [objLocationManager requestWhenInUseAuthorization];
-    }
-    [objLocationManager startUpdatingLocation];
-}
-
-- (void)locationManager:(CLLocationManager *)manager
-     didUpdateLocations:(nonnull NSArray<CLLocation *> *)locations; {
-    CLLocation *newLocation = [locations objectAtIndex:0];
-    latitude_UserLocation = newLocation.coordinate.latitude;
-    longitude_UserLocation = newLocation.coordinate.longitude;
-    [objLocationManager stopUpdatingLocation];
-    //[self loadMapView];
-}
-
-- (void) locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
-    [objLocationManager stopUpdatingLocation];
-}
-
-/*- (void) loadMapView {
-    
-    //shown area
-    MKCoordinateSpan span;
-    span.latitudeDelta = 0.2;
-    span.longitudeDelta = 0.2;
-    //staring point
-    CLLocationCoordinate2D location2D;
-    location2D.latitude = latitude_UserLocation;
-    location2D.longitude = longitude_UserLocation;
-    
-    MKCoordinateRegion region;
-    region.span = span;
-    region.center = location2D;
 }*/
 - (IBAction)mapSegment:(id)sender {
     switch (segment.selectedSegmentIndex) {
